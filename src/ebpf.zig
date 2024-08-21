@@ -409,11 +409,11 @@ pub const BPF_CLS_MASK: u8 = 0x07;
 /// Mask to extract the arithmetic operation code from an instruction operation code.
 pub const BPF_ALU_OP_MASK: u8 = 0xf0;
 
-const Instruction = packed struct {
+pub const Instruction = packed struct {
     op: u8,
     dst: u8,
     src: u8,
     offset: u16,
     // imm stores the data that needs to be stored in reg for ex.
-    imm: u32,
+    imm: i32,
 };
