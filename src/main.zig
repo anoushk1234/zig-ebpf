@@ -1,10 +1,25 @@
 const std = @import("std");
 const ebpf = @import("ebpf.zig");
+const interpreter = @import("interpreter.zig");
+
 pub fn main() !void {}
 
-// test "simple test" {
-//     var list = std.ArrayList(i32).init(std.testing.allocator);
-//     defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-//     try list.append(42);
-//     try std.testing.expectEqual(@as(i32, 42), list.pop());
-// }
+test "simple execute" {
+    var buffer: [1000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+    const prog = [_]u8{
+        0x07, 0x01, 0x00, 0x00, 0x05, 0x06, 0x00, 0x00,
+        0xb7, 0x02, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00,
+        0xbf, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xdc, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
+        0x87, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+
+    const mem = [_]u8{ 0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd };
+    const mbuff = [_]u8{0} ** 32;
+
+    const vm = interpreter.execute_program(allocator, &prog, &mem, &mbuff);
+    _ = vm;
+}

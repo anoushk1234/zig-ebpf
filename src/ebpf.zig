@@ -416,11 +416,11 @@ pub const Instruction = packed struct {
     offset: u16,
     // imm stores the data that needs to be stored in reg for ex.
     imm: i32,
-    pub fn get_ix(program: []u8, pc: u8) !Instruction {
+    pub fn get_ix(program: []const u8, pc: usize) !Instruction {
         if ((pc + 1) * INSN_SIZE > program.len) {
             return InstructionError.InvalidInstructionSize;
         }
-        return Instruction{ .op = program[INSN_SIZE * pc], .dst = program[INSN_SIZE * pc + 1] & 0x0f, .src = (program[INSN_SIZE * pc + 1] & 0x0f) >> 4, .offset = std.mem.readInt(u16, program[INSN_SIZE + 2 ..]), .imm = std.mem.readInt(i32, program[INSN_SIZE + 4 ..]) };
+        return Instruction{ .op = program[INSN_SIZE * pc], .dst = program[INSN_SIZE * pc + 1] & 0x0f, .src = (program[INSN_SIZE * pc + 1] & 0x0f) >> 4, .offset = std.mem.readInt(u16, program[INSN_SIZE + 2 ..][0..2], .little), .imm = std.mem.readInt(i32, program[INSN_SIZE + 4 ..][0..4], .little) };
     }
 };
 
