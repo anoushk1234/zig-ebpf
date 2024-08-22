@@ -2,6 +2,7 @@ const std = @import("std");
 const ebpf = @import("ebpf.zig");
 
 const MemAccessType = enum { store, load };
+const SHIFT_MASK_64: u64 = 0x3f;
 
 pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []u8, mbuff: []u8) !u64 {
     const stack: []u8 = try alloc.alloc(u8, ebpf.STACK_SIZE);
@@ -17,7 +18,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []u8, mbuff
         reg[1] = mem.ptr;
     }
 
-    while (pc * ebpf.INSN_SIZE < program.len) {
+    while (pc * ebpf.ix_SIZE < program.len) {
         // if (program[pc + 1] < program.len)
         // load ix
         const ix = ebpf.Instruction.get_ix(program, pc);
@@ -112,6 +113,47 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []u8, mbuff
             ebpf.ADD64_REG => reg[dst] = @addWithOverflow(reg[dst], reg[src])[0],
             ebpf.SUB64_IMM => reg[dst] = @subWithOverflow(reg[dst], ix.imm)[0],
             ebpf.SUB64_REG => reg[dst] = @subWithOverflow(reg[dst], reg[src])[0],
+            ebpf.MUL64_IMM => reg[dst] = @mulWithOverflow(reg[dst], ix.imm)[0],
+            ebpf.MUL64_REG => reg[dst] = @mulWithOverflow(reg[src], ix.imm)[0],
+            ebpf.DIV64_IMM => {
+                if (ix.imm == 0) {
+                    reg[dst] = 0;
+                } else {
+                    reg[dst] /= ix.imm;
+                }
+            },
+            ebpf.DIV64_REG => {
+                if (reg[src] == 0) {
+                    reg[dst] = 0;
+                } else {
+                    reg[dst] /= reg[src];
+                }
+            },
+            ebpf.OR64_IMM => reg[dst] |= ix.imm,
+            ebpf.OR64_REG => reg[dst] |= reg[src],
+            ebpf.AND64_IMM => reg[dst] &= ix.imm,
+            ebpf.AND64_REG => reg[dst] &= reg[src],
+            ebpf.LSH64_IMM => reg[dst] <<= ix.imm & SHIFT_MASK_64,
+            ebpf.LSH64_REG => reg[dst] <<= reg[src] & SHIFT_MASK_64,
+            ebpf.RSH64_IMM => reg[dst] >>= ix.imm & SHIFT_MASK_64,
+            ebpf.RSH64_REG => reg[dst] >>= reg[src] & SHIFT_MASK_64,
+            ebpf.NEG64 => reg[dst] = -(reg[dst]),
+            ebpf.MOD64_IMM => {
+                if (ix.imm != 0) {
+                    reg[dst] %= ix.imm;
+                }
+            },
+            ebpf.MOD64_REG => {
+                if (reg[src] != 0) {
+                    reg[dst] %= reg[src];
+                }
+            },
+            ebpf.XOR64_IMM => reg[dst] ^= ix.imm,
+            ebpf.XOR64_REG => reg[dst] ^= reg[src],
+            ebpf.MOV64_IMM => reg[dst] = ix.imm,
+            ebpf.MOV64_REG => reg[dst] = reg[src],
+            ebpf.ARSH64_IMM => reg[dst] = (reg[dst] >> (ix.imm & SHIFT_MASK_64)),
+            ebpf.ARSH64_REG => reg[dst] = (reg[dst] >> (reg[src] & SHIFT_MASK_64)),
             else => {
                 return VmError.InvalidOpCode;
             },
