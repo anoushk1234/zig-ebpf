@@ -107,6 +107,11 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []u8, mbuff
                 reg[dst] = d;
             },
 
+            // ALU-64
+            ebpf.ADD64_IMM => reg[dst] = @addWithOverflow(reg[dst], ix.imm)[0],
+            ebpf.ADD64_REG => reg[dst] = @addWithOverflow(reg[dst], reg[src])[0],
+            ebpf.SUB64_IMM => reg[dst] = @subWithOverflow(reg[dst], ix.imm)[0],
+            ebpf.SUB64_REG => reg[dst] = @subWithOverflow(reg[dst], reg[src])[0],
             else => {
                 return VmError.InvalidOpCode;
             },
