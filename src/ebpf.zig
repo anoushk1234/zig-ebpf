@@ -1,16 +1,16 @@
 const std = @import("std");
 
-/// Reference: https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
-/// Maximum number of instructions in an eBPF program.
+/// Reference: https://github.com/iovisor/bpf-docs/blob/master/md
+/// Maximum number of instructions in an program.
 pub const PROG_MAX_INSNS: usize = 1000000;
-/// Size of an eBPF instructions, in bytes.
+/// Size of an instructions, in bytes.
 pub const INSN_SIZE: usize = 8;
-/// Maximum size of an eBPF program, in bytes.
+/// Maximum size of an program, in bytes.
 pub const PROG_MAX_SIZE: usize = PROG_MAX_INSNS * INSN_SIZE;
-/// Stack for the eBPF stack, in bytes.
+/// Stack for the stack, in bytes.
 pub const STACK_SIZE: usize = 512;
 
-// eBPF op codes.
+// op codes.
 // See also https://www.kernel.org/doc/Documentation/networking/filter.txt
 
 // Three least significant bits are operation class:
@@ -416,4 +416,14 @@ pub const Instruction = packed struct {
     offset: u16,
     // imm stores the data that needs to be stored in reg for ex.
     imm: i32,
+    pub fn get_ix(program: []u8, pc: u8) !Instruction {
+        if ((pc + 1) * INSN_SIZE > program.len) {
+            return InstructionError.InvalidInstructionSize;
+        }
+        return Instruction{ .op = program[INSN_SIZE * pc], .dst = program[INSN_SIZE * pc + 1] & 0x0f, .src = (program[INSN_SIZE * pc + 1] & 0x0f) >> 4, .offset = std.mem.readInt(u16, program[INSN_SIZE + 2 ..]), .imm = std.mem.readInt(i32, program[INSN_SIZE + 4 ..]) };
+    }
+};
+
+pub const InstructionError = error{
+    InvalidInstructionSize,
 };
