@@ -204,7 +204,6 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                 reg[dst] >>=
                     @as(u6, @intCast((@as(u64, @intCast(reg[src])) & SHIFT_MASK_64)));
             },
-            //reg[dst] = (reg[dst] >> (reg[src] & SHIFT_MASK_64)),
 
             ebpf.BE => {
                 switch (@as(u64, @intCast(ix.imm))) {
@@ -223,9 +222,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                 return VmError.InvalidOpCode;
             },
         }
-        // std.log.warn("R1: {d}\nOP: {d}\n reg[src]: {d}\nreg[dst]: {d}", .{ reg[1], ix.op, reg[src], reg[dst] });
     }
-    std.log.err("ERROR", .{});
     return 0;
 }
 const VmError = error{ OutOfBoundsMemoryAccess, InvalidInstructionAddress, InvalidOpCode, OperandExceedingBitsize, InvalidImm };
