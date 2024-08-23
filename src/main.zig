@@ -1,25 +1,25 @@
 const std = @import("std");
 const ebpf = @import("ebpf.zig");
 const interpreter = @import("interpreter.zig");
+const expect = std.testing.expect;
 
 pub fn main() !void {}
 
-test "simple execute" {
+test "simple_alu64_add" {
     var buffer: [1000]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
-    const prog = [_]u8{
-        0x07, 0x01, 0x00, 0x00, 0x05, 0x06, 0x00, 0x00,
-        0xb7, 0x02, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00,
-        0xbf, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0xdc, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
-        0x87, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    };
 
+    //mov64 r0, 0
+    //mov64 r1, 2
+    //add64 r0, 1
+    //add64 r0, r1
+    //exit
+    const prog = [_]u8{ 183, 0, 0, 0, 0, 0, 0, 0, 183, 1, 0, 0, 2, 0, 0, 0, 7, 0, 0, 0, 1, 0, 0, 0, 15, 16, 0, 0, 0, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0 };
     const mem = [_]u8{ 0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd };
     const mbuff = [_]u8{0} ** 32;
 
-    const vm = interpreter.execute_program(allocator, &prog, &mem, &mbuff);
-    _ = vm;
+    const result = try interpreter.execute_program(allocator, &prog, &mem, &mbuff);
+
+    try expect(result == 8);
 }

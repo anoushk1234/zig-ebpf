@@ -1,4 +1,4 @@
 const std = @import("std");
-const ebpf = @import("ebpf.zig");
-const interpreter = @import("interpreter.zig");
+pub const ebpf = @import("ebpf.zig");
+pub const interpreter = @import("interpreter.zig");
 const testing = std.testing;
