@@ -205,6 +205,17 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                     @as(u6, @intCast((@as(u64, @intCast(reg[src])) & SHIFT_MASK_64)));
             },
 
+            ebpf.LE => {
+                switch (@as(u64, @intCast(ix.imm))) {
+                    16 => reg[dst] = std.mem.nativeToLittle(u64, @as(u16, @intCast(reg[dst]))),
+                    32 => reg[dst] = std.mem.nativeToLittle(u64, @as(u32, @intCast(reg[dst]))),
+                    64 => reg[dst] = std.mem.nativeToLittle(u64, reg[dst]),
+                    else => {
+                        std.log.err("InvalidImm: {d}", .{ix.imm});
+                        return VmError.InvalidImm;
+                    },
+                }
+            },
             ebpf.BE => {
                 switch (@as(u64, @intCast(ix.imm))) {
                     16 => reg[dst] = std.mem.nativeToBig(u64, @as(u16, @intCast(reg[dst]))),
