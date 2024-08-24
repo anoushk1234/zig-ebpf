@@ -5,7 +5,7 @@ This is a wip implementation of eBPF in native Zig inspired by Quentin Monnet's 
 ## What works
 - [x] 64-bit ALU operations
 - [ ] Memory operations
-- [ ] Byteswap operations
+- [x] Byteswap operations
 - [ ] Branch instructions
 - [ ] Syscalls
 - [ ] JIT Compiler
