@@ -6,7 +6,7 @@ const expect = std.testing.expect;
 pub fn main() !void {}
 
 test "simple_alu64_add" {
-    var buffer: [1000]u8 = undefined;
+    var buffer: [512]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
 
