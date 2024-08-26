@@ -7,7 +7,7 @@ This is a wip implementation of eBPF in native Zig inspired by Quentin Monnet's 
 - [x] Memory operations
 - [x] Byteswap operations
 - [ ] Branch instructions
-- [ ] Syscalls
+- [x] Syscalls
 - [ ] JIT Compiler
 - [ ] Assembler & Disassembler
 - [ ] Unit Tests & Fuzzing
