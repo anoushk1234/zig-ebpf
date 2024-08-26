@@ -116,6 +116,48 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                 reg[dst] = d;
             },
 
+            // Store
+            ebpf.ST_B_IMM => {
+                const d: *u8 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u8))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 1, stack);
+                d.* = @as(u8, @intCast(ix.imm));
+            },
+            ebpf.ST_H_IMM => {
+                const d: *u16 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u16))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 2, stack);
+                d.* = @as(u16, @intCast(ix.imm));
+            },
+            ebpf.ST_W_IMM => {
+                const d: *u32 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u32))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 4, stack);
+                d.* = @as(u32, @intCast(ix.imm));
+            },
+            ebpf.ST_DW_IMM => {
+                const d: *u64 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u64))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 8, stack);
+                d.* = @as(u64, @intCast(ix.imm));
+            },
+
+            ebpf.ST_B_REG => {
+                const d: *u8 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u8))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 1, stack);
+                d.* = @as(u8, @intCast(reg[src]));
+            },
+            ebpf.ST_H_REG => {
+                const d: *u16 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u16))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 2, stack);
+                d.* = @as(u16, @intCast(reg[src]));
+            },
+            ebpf.ST_W_REG => {
+                const d: *u32 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u32))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 4, stack);
+                d.* = @as(u32, @intCast(reg[src]));
+            },
+            ebpf.ST_DW_REG => {
+                const d: *u64 = @ptrFromInt(reg[dst] + @as(u64, @intCast(@as(isize, @intCast(ix.offset)) * @sizeOf(u64))));
+                try check_mem(@intFromPtr(d), mbuff, mem, pc, MemAccessType.store, 8, stack);
+                d.* = @as(u64, @intCast(reg[src]));
+            },
             // ALU-64
             ebpf.ADD64_IMM => reg[dst] = @addWithOverflow(reg[dst], @as(u64, @intCast(ix.imm)))[0],
             ebpf.ADD64_REG => reg[dst] = @addWithOverflow(reg[dst], reg[src])[0],
