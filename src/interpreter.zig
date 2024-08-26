@@ -295,3 +295,7 @@ fn check_mem(addr: u64, mbuf: []const u8, mem: []const u8, inst_ptr: u64, op_typ
     }
     return VmError.OutOfBoundsMemoryAccess;
 }
+
+pub fn jump(pc: *usize, ix: *const ebpf.Instruction) void {
+    pc.* = @as(usize, @intCast(@as(i16, @intCast(pc.*)) + ix.offset));
+}
