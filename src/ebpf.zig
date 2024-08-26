@@ -424,10 +424,10 @@ pub const Instruction = packed struct {
         }
         return Instruction{
             .op = program[INSN_SIZE * pc],
-            .dst = program[INSN_SIZE * pc + 1] & 0x0f,
-            .src = (program[INSN_SIZE * pc + 1] & 0x0f) >> 4,
-            .offset = std.mem.nativeToLittle(i16, std.mem.bytesToValue(i16, program[INSN_SIZE + 2 ..][0..2])),
-            .imm = std.mem.nativeToLittle(i32, std.mem.bytesToValue(i32, program[INSN_SIZE + 4 ..][0..4])),
+            .dst = program[INSN_SIZE * pc + 1] & 0x0F,
+            .src = (program[INSN_SIZE * pc + 1] & 0xF0) >> 4,
+            .offset = std.mem.nativeToLittle(i16, std.mem.bytesToValue(i16, program[INSN_SIZE * pc + 2 ..])),
+            .imm = std.mem.nativeToLittle(i32, std.mem.bytesToValue(i32, program[INSN_SIZE * pc + 4 ..])),
         };
     }
 };

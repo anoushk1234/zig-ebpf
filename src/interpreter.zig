@@ -7,7 +7,7 @@ const syscalls = @import("syscalls.zig");
 const MemAccessType = enum { store, load };
 const SHIFT_MASK_64: u64 = 0x3f;
 
-pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []const u8, mbuff: []const u8, syscalls_map: *std.ArrayList(ebpf.Syscall)) !u64 {
+pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []const u8, mbuff: []const u8, syscalls_map: *std.AutoHashMap(usize, ebpf.Syscall)) !u64 {
     const stack: []u8 = try alloc.alloc(u8, ebpf.STACK_SIZE);
     defer alloc.free(stack);
 
@@ -21,9 +21,9 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
         reg[1] = @as(u64, @intFromPtr(mem.ptr));
     }
 
-    if (syscalls_map.items.len == 0) {
-        try syscalls_map.append(&syscalls.bpf_ktime_get_ns);
-        try syscalls_map.append(&syscalls.bpf_trace_printk);
+    if (syscalls_map.count() == 0) {
+        try syscalls_map.put(syscalls.BPF_KTIME_GETNS_IDX, &syscalls.bpf_ktime_get_ns);
+        try syscalls_map.put(syscalls.BPF_TRACE_PRINTK_IDX, &syscalls.bpf_trace_printk);
     }
     while (pc * ebpf.INSN_SIZE < program.len) {
         // load ix
@@ -33,7 +33,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
         const dst = ix.dst;
         const src = ix.src;
         if (builtin.is_test) {
-            helpers.debug_print_vm_state(&reg, pc, src, dst);
+            // helpers.debug_print_vm_state(&reg, pc, src, dst);
             helpers.debug_print_ix(ix);
         }
         switch (ix.op) {
@@ -276,8 +276,8 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                 }
             },
             ebpf.CALL => {
-                if (ix.imm < syscalls_map.items.len) {
-                    const call = syscalls_map.items[@as(usize, @intCast(ix.imm))];
+                if (syscalls_map.contains(@as(usize, @intCast(ix.imm)))) {
+                    const call = syscalls_map.get(@as(usize, @intCast(ix.imm))).?;
                     reg[0] = call(reg[1], reg[2], reg[3], reg[4], reg[5]);
                 } else {
                     std.log.err("UnknownSyscall: {d}", .{ix.imm});
@@ -289,6 +289,11 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
                 std.log.err("InvalidOpCode: {d}", .{ix.op});
                 return VmError.InvalidOpCode;
             },
+        }
+
+        if (builtin.is_test) {
+            helpers.debug_print_vm_state(&reg, pc, src, dst);
+            // helpers.debug_print_ix(ix);
         }
     }
     return 0;
