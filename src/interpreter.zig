@@ -7,7 +7,7 @@ const syscalls = @import("syscalls.zig");
 const MemAccessType = enum { store, load };
 const SHIFT_MASK_64: u64 = 0x3f;
 
-pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []const u8, mbuff: []const u8, syscalls_map: *std.AutoHashMap(usize, ebpf.Syscall)) !u64 {
+pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []const u8, mbuff: []const u8, syscalls_map: *std.AutoHashMap(usize, ebpf.Syscall)) !u64 {
     const stack: []u8 = try alloc.alloc(u8, ebpf.STACK_SIZE);
     defer alloc.free(stack);
 
@@ -34,7 +34,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
         const src = ix.src;
         if (builtin.is_test) {
             // helpers.debug_print_vm_state(&reg, pc, src, dst);
-            helpers.debug_print_ix(ix);
+            helpers.debug_print_ix(&ix);
         }
         switch (ix.op) {
             ebpf.LD_ABS_B => {
@@ -170,7 +170,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
             ebpf.SUB64_IMM => reg[dst] = @subWithOverflow(reg[dst], @as(u64, @intCast(ix.imm)))[0],
             ebpf.SUB64_REG => reg[dst] = @subWithOverflow(reg[dst], reg[src])[0],
             ebpf.MUL64_IMM => reg[dst] = @mulWithOverflow(reg[dst], @as(u64, @intCast(ix.imm)))[0],
-            ebpf.MUL64_REG => reg[dst] = @mulWithOverflow(reg[src], reg[src])[0],
+            ebpf.MUL64_REG => reg[dst] = @mulWithOverflow(reg[dst], reg[src])[0],
             ebpf.DIV64_IMM => {
                 if (ix.imm == 0) {
                     reg[dst] = 0;
@@ -293,7 +293,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []const u8, mem: []con
 
         if (builtin.is_test) {
             helpers.debug_print_vm_state(&reg, pc, src, dst);
-            // helpers.debug_print_ix(ix);
+            // std.time.sleep(10000000000);
         }
     }
     return 0;
@@ -319,3 +319,6 @@ fn check_mem(addr: u64, mbuf: []const u8, mem: []const u8, inst_ptr: u64, op_typ
 pub fn jump(pc: *usize, ix: *const ebpf.Instruction) void {
     pc.* = @as(usize, @intCast(@as(i16, @intCast(pc.*)) + ix.offset));
 }
+
+// fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
+// }

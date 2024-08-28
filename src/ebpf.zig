@@ -418,7 +418,7 @@ pub const Instruction = packed struct {
     offset: i16,
     // imm stores the data that needs to be stored in reg for ex.
     imm: i32,
-    pub fn get_ix(program: []const u8, pc: usize) !Instruction {
+    pub fn get_ix(program: []u8, pc: usize) !Instruction {
         if ((pc + 1) * INSN_SIZE > program.len) {
             return InstructionError.InvalidInstructionSize;
         }
@@ -426,8 +426,8 @@ pub const Instruction = packed struct {
             .op = program[INSN_SIZE * pc],
             .dst = program[INSN_SIZE * pc + 1] & 0x0F,
             .src = (program[INSN_SIZE * pc + 1] & 0xF0) >> 4,
-            .offset = std.mem.nativeToLittle(i16, std.mem.bytesToValue(i16, program[INSN_SIZE * pc + 2 ..])),
-            .imm = std.mem.nativeToLittle(i32, std.mem.bytesToValue(i32, program[INSN_SIZE * pc + 4 ..])),
+            .offset = std.mem.nativeToLittle(i16, std.mem.bytesToValue(i16, program[(INSN_SIZE * pc + 2)..])),
+            .imm = std.mem.nativeToLittle(i32, std.mem.bytesToValue(i32, program[(INSN_SIZE * pc + 4)..])),
         };
     }
 };
