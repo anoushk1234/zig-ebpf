@@ -1,7 +1,7 @@
 const std = @import("std");
 const ebpf = @import("ebpf.zig");
 
-// Define possible errors that can occur during disassembly
+// Possible errors that can occur during disassembly
 pub const DisassemblerError = error{
     InvalidProgram,
     UnknownOpcode,
@@ -10,7 +10,7 @@ pub const DisassemblerError = error{
     InvalidInstructionSize,
 };
 
-// Struct to represent a high-level eBPF instruction
+// Struct representing high-level eBPF instruction
 pub const HLInsn = struct {
     opcode: u8,
     name: []const u8,
