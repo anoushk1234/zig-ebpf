@@ -4,11 +4,10 @@ const disassembler = @import("disassembler.zig");
 const ebpf = @import("ebpf.zig");
 
 // Helper function to disassemble and compare results
-fn disasm(allocator: std.mem.Allocator, bytecode: []const u8, expected: []const u8) !void {
+pub fn disasm(allocator: std.mem.Allocator, bytecode: []const u8, expected: []const u8) !void {
     const insn = try disassembler.to_insn_vec(allocator, bytecode);
     defer {
         for (insn) |item| {
-            allocator.free(item.name);
             allocator.free(item.description);
         }
         allocator.free(insn);
@@ -36,12 +35,15 @@ test "disassembler - empty" {
     try disasm(testing.allocator, &[_]u8{}, "");
 }
 
-// test "disassembler - exit" {
-//     std.debug.print("Running test: disassembler - exit\n", .{});
-//     const bytecode = &[_]u8{ 0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-//     try disasm(testing.allocator, bytecode, "exit");
-// }
+test "disassembler - tail" {
+    const bytecode = &[_]u8{ 0x8d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    try disasm(testing.allocator, bytecode, "tail_call");
+}
 
+test "disassembler - exit" {
+    const bytecode = &[_]u8{ 0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    try disasm(testing.allocator, bytecode, "exit");
+}
 test "disassembler - add64" {
     const bytecode1 = &[_]u8{ 0x0f, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     try disasm(testing.allocator, bytecode1, "add64 r3, r1");

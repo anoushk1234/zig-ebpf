@@ -104,9 +104,8 @@ pub fn to_insn_vec(allocator: std.mem.Allocator, prog: []const u8) DisassemblerE
     }
 
     var res = std.ArrayList(HLInsn).init(allocator);
-    errdefer {
+    defer {
         for (res.items) |item| {
-            allocator.free(item.name);
             allocator.free(item.description);
         }
         res.deinit();
@@ -539,13 +538,13 @@ pub fn to_insn_vec(allocator: std.mem.Allocator, prog: []const u8) DisassemblerE
                 name = "call";
                 desc = try std.fmt.allocPrint(allocator, "{s} 0x{x}", .{ name, @as(u32, @bitCast(insn.imm)) });
             },
-            ebpf.TAIL_CALL => { // 0xe5
+            ebpf.TAIL_CALL => { // 0x8d
                 name = "tail_call";
-                desc = name;
+                desc = try std.fmt.allocPrint(allocator, "{s}", .{name});
             },
             ebpf.EXIT => { // 0x95
                 name = "exit";
-                desc = name;
+                desc = try std.fmt.allocPrint(allocator, "{s}", .{name});
             },
 
             // BPF_JMP32 class
@@ -645,7 +644,7 @@ pub fn to_insn_vec(allocator: std.mem.Allocator, prog: []const u8) DisassemblerE
 
         try res.append(HLInsn{
             .opcode = insn.op,
-            .name = try allocator.dupe(u8, name),
+            .name = name,
             .description = desc,
             .dst = insn.dst,
             .src = insn.src,
