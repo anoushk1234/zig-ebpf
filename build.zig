@@ -64,16 +64,63 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    // b.addModule("zig-ebpf", .{});
     // Creates a step for unit testing. This only builds the test executable
-    // but does not run it.
-    const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    // but does not run it
+    // .
+    const zig_ebpf = b.addModule("zig-ebpf", .{ .root_source_file = b.path("src/root.zig") });
 
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    exe.root_module.addImport("zig-ebpf", zig_ebpf);
+    lib.root_module.addImport("zig-ebpf", zig_ebpf);
 
+    const test_step = b.step("test", "Run unit tests");
+
+    // var test_files = std.ArrayList([]const u8).init(b.allocator);
+    // defer test_files.deinit();
+    // var options = b.addOptions();
+
+    // Add all files names in the src folder to `files`
+    const dir = std.fs.cwd().openDir("tests", .{ .iterate = true });
+    // var dir_u = dir catch |e| {
+    //     std.log.warn("error: {}", .{e})
+    //
+    // };
+    if (dir) |dir_value| {
+        var it = dir_value.iterate();
+        while (it.next()) |file| {
+            // std.log.warn("err {any}", .{file});
+            // TODO: add extenson check
+            if (file == null) {
+                break;
+            }
+            if (file.?.kind != std.fs.File.Kind.file) {
+                continue;
+            }
+            var filename: []u8 = &[_]u8{};
+            var temp = concatAndReturnBuffer(b.allocator, "tests/", file.?.name) catch unreachable;
+            if (temp.toOwnedSlice()) |name_slice| {
+                filename = name_slice;
+            } else |_| {}
+            const lib_unit_tests = b.addTest(.{
+                .root_source_file = b.path(filename),
+                .target = target,
+                .optimize = optimize,
+            });
+            lib_unit_tests.root_module.addImport("zig-ebpf", zig_ebpf);
+
+            const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+
+            // Similar to creating the run step earlier, this exposes a `test` step to
+            // the `zig build --help` menu, providing a way for the user to request
+            // running the unit tests.
+            test_step.dependOn(&run_lib_unit_tests.step);
+            // try files.append(b.dupe(file.name));
+        } else |err| {
+            std.log.warn("err {}", .{err});
+        }
+    } else |err| {
+        std.log.warn("err {}", .{err});
+    }
     const exe_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -81,11 +128,12 @@ pub fn build(b: *std.Build) void {
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
+}
+
+fn concatAndReturnBuffer(allocator: std.mem.Allocator, one: []const u8, two: []const u8) !std.ArrayList(u8) {
+    var b = std.ArrayList(u8).init(allocator);
+    try b.appendSlice(one);
+    try b.appendSlice(two);
+    return b;
 }

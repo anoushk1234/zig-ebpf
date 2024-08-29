@@ -275,6 +275,75 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []const u8,
                     },
                 }
             },
+
+            // Branch
+            ebpf.JA => jump(&pc, &ix),
+            ebpf.JEQ_IMM => if (reg[dst] == @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JEQ_REG => if (reg[dst] == reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JGT_IMM => if (reg[dst] > @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JGT_REG => if (reg[dst] > reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JGE_IMM => if (reg[dst] >= @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JGE_REG => if (reg[dst] >= reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JLT_IMM => if (reg[dst] < @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JLT_REG => if (reg[dst] < reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JLE_IMM => if (reg[dst] <= @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JLE_REG => if (reg[dst] <= reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSET_IMM => if (reg[dst] & @as(u64, @intCast(ix.imm)) != 0) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSET_REG => if (reg[dst] & reg[src] != 0) {
+                jump(&pc, &ix);
+            },
+            ebpf.JNE_IMM => if (reg[dst] != @as(u64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JNE_REG => if (reg[dst] != reg[src]) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSGT_IMM => if (@as(i64, @intCast(reg[dst])) > @as(i64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSGT_REG => if (@as(i64, @intCast(reg[dst])) > @as(i64, @intCast(reg[src]))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSGE_IMM => if (@as(i64, @intCast(reg[dst])) >= @as(i64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSGE_REG => if (@as(i64, @intCast(reg[dst])) >= @as(i64, @intCast(reg[src]))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSLT_IMM => if (@as(i64, @intCast(reg[dst])) < @as(i64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSLT_REG => if (@as(i64, @intCast(reg[dst])) < @as(i64, @intCast(reg[src]))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSLE_IMM => if (@as(i64, @intCast(reg[dst])) <= @as(i64, @intCast(ix.imm))) {
+                jump(&pc, &ix);
+            },
+            ebpf.JSLE_REG => if (@as(i64, @intCast(reg[dst])) <= @as(i64, @intCast(reg[src]))) {
+                jump(&pc, &ix);
+            },
             ebpf.CALL => {
                 if (syscalls_map.contains(@as(usize, @intCast(ix.imm)))) {
                     const call = syscalls_map.get(@as(usize, @intCast(ix.imm))).?;

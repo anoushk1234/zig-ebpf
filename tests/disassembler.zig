@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
-const disassembler = @import("disassembler.zig");
-const ebpf = @import("ebpf.zig");
+const disassembler = @import("zig-ebpf").disassembler;
+const ebpf = @import("zig-ebpf").ebpf;
 
 // Helper function to disassemble and compare results
 pub fn disasm(allocator: std.mem.Allocator, bytecode: []const u8, expected: []const u8) !void {
