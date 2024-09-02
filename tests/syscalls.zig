@@ -29,6 +29,6 @@ test "simple_syscall_time" {
 
     const result = try interpreter.execute_program(allocator, &prog, &mem, &mbuff, &syscalls_map);
 
-    std.log.warn("simple_syscall_time: {d}", .{result});
+    // std.log.warn("simple_syscall_time: {d}", .{result});
     try expect(result == 0x0102030405);
 }

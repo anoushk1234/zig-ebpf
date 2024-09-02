@@ -234,7 +234,13 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []const u8,
             },
             ebpf.XOR64_IMM => reg[dst] ^= @as(u64, @intCast(ix.imm)),
             ebpf.XOR64_REG => reg[dst] ^= reg[src],
-            ebpf.MOV64_IMM => reg[dst] = @as(u64, @intCast(ix.imm)),
+            ebpf.MOV64_IMM => {
+                if (ix.imm >= 0) {
+                    reg[dst] = @as(u64, @intCast(ix.imm));
+                } else {
+                    reg[dst] = std.math.maxInt(u64);
+                }
+            },
             ebpf.MOV64_REG => reg[dst] = reg[src],
             ebpf.ARSH64_IMM => {
                 if (ix.imm < 0 or ix.imm >= @bitSizeOf(u64)) {
@@ -320,19 +326,19 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []const u8,
             ebpf.JNE_REG => if (reg[dst] != reg[src]) {
                 jump(&pc, &ix);
             },
-            ebpf.JSGT_IMM => if (@as(i64, @intCast(reg[dst])) > @as(i64, @intCast(ix.imm))) {
+            ebpf.JSGT_IMM => if (@as(i64, @bitCast(reg[dst])) > @as(i64, @intCast(ix.imm))) {
                 jump(&pc, &ix);
             },
-            ebpf.JSGT_REG => if (@as(i64, @intCast(reg[dst])) > @as(i64, @intCast(reg[src]))) {
+            ebpf.JSGT_REG => if (@as(i64, @bitCast(reg[dst])) > @as(i64, @intCast(reg[src]))) {
                 jump(&pc, &ix);
             },
-            ebpf.JSGE_IMM => if (@as(i64, @intCast(reg[dst])) >= @as(i64, @intCast(ix.imm))) {
+            ebpf.JSGE_IMM => if (@as(i64, @bitCast(reg[dst])) >= @as(i64, @intCast(ix.imm))) {
                 jump(&pc, &ix);
             },
-            ebpf.JSGE_REG => if (@as(i64, @intCast(reg[dst])) >= @as(i64, @intCast(reg[src]))) {
+            ebpf.JSGE_REG => if (@as(i64, @bitCast(reg[dst])) >= @as(i64, @intCast(reg[src]))) {
                 jump(&pc, &ix);
             },
-            ebpf.JSLT_IMM => if (@as(i64, @intCast(reg[dst])) < @as(i64, @intCast(ix.imm))) {
+            ebpf.JSLT_IMM => if (@as(i64, @bitCast(reg[dst])) < @as(i64, @intCast(ix.imm))) {
                 jump(&pc, &ix);
             },
             ebpf.JSLT_REG => if (@as(i64, @intCast(reg[dst])) < @as(i64, @intCast(reg[src]))) {
@@ -341,7 +347,7 @@ pub fn execute_program(alloc: std.mem.Allocator, program: []u8, mem: []const u8,
             ebpf.JSLE_IMM => if (@as(i64, @intCast(reg[dst])) <= @as(i64, @intCast(ix.imm))) {
                 jump(&pc, &ix);
             },
-            ebpf.JSLE_REG => if (@as(i64, @intCast(reg[dst])) <= @as(i64, @intCast(reg[src]))) {
+            ebpf.JSLE_REG => if (@as(i64, @bitCast(reg[dst])) <= @as(i64, @intCast(reg[src]))) {
                 jump(&pc, &ix);
             },
             ebpf.CALL => {

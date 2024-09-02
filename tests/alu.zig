@@ -17,6 +17,24 @@ test "simple_alu64_add" {
 
     const result = try interpreter.execute_program(allocator, &prog, &mem, &mbuff, &syscalls_map);
 
-    std.log.warn("aluadd: {d}", .{result});
+    // std.log.warn("aluadd: {d}", .{result});
     try expect(result == 0x2a);
+}
+
+test "simple_jsle" {
+    var buffer: [512]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+
+    var syscalls_map = std.AutoHashMap(usize, ebpf.Syscall).init(std.testing.allocator);
+    defer syscalls_map.deinit();
+    var prog = [_]u8{ 183, 0, 0, 0, 0, 0, 0, 0, 183, 1, 0, 0, 254, 255, 255, 255, 101, 1, 4, 0, 255, 255, 255, 255, 183, 0, 0, 0, 1, 0, 0, 0, 183, 1, 0, 0, 0, 0, 0, 0, 101, 1, 1, 0, 255, 255, 255, 255, 183, 0, 0, 0, 2, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0 };
+
+    const mem = [_]u8{ 0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd };
+    const mbuff = [_]u8{0} ** 32;
+
+    const result = try interpreter.execute_program(allocator, &prog, &mem, &mbuff, &syscalls_map);
+
+    // std.log.warn("jsgt_imm: {d}", .{result});
+    try expect(result == 0x1);
 }
