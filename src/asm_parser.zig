@@ -5,10 +5,10 @@ const expectEqualSlices = std.testing.expectEqualSlices;
 
 /// Represents an operand in an eBPF instruction
 pub const Operand = union(enum) {
-    Register: u8,
+    Register: i64,
     Integer: i64,
     Memory: struct {
-        base: u8,
+        base: i64,
         offset: i64,
     },
     Nil,
@@ -69,9 +69,9 @@ fn parseInteger(input: []const u8) !i64 {
 }
 
 /// Parses a register from the input
-fn parseRegister(input: []const u8) !u8 {
+fn parseRegister(input: []const u8) !i64 {
     if (input.len < 2 or input[0] != 'r') return error.InvalidRegister;
-    return std.fmt.parseInt(u8, input[1..], 0);
+    return std.fmt.parseInt(i64, input[1..], 0);
 }
 
 /// Parses an operand from the input
