@@ -38,3 +38,22 @@ test "simple_jsle" {
     // std.log.warn("jsgt_imm: {d}", .{result});
     try expect(result == 0x1);
 }
+
+test "simple_jeq64_reg" {
+    var buffer: [512]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+
+    var syscalls_map = std.AutoHashMap(usize, ebpf.Syscall).init(std.testing.allocator);
+    defer syscalls_map.deinit();
+
+    var prog = [_]u8{ 183, 9, 0, 0, 1, 0, 0, 0, 103, 9, 0, 0, 32, 0, 0, 0, 183, 0, 0, 0, 0, 0, 0, 0, 183, 1, 0, 0, 10, 0, 0, 0, 183, 2, 0, 0, 11, 0, 0, 0, 29, 33, 5, 0, 0, 0, 0, 0, 183, 0, 0, 0, 1, 0, 0, 0, 183, 1, 0, 0, 11, 0, 0, 0, 79, 145, 0, 0, 0, 0, 0, 0, 29, 33, 1, 0, 0, 0, 0, 0, 183, 0, 0, 0, 2, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0 };
+    const mem = [_]u8{ 0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd };
+    const mbuff = [_]u8{0} ** 32;
+
+    const result = try interpreter.execute_program(allocator, prog[0..], &mem, &mbuff, &syscalls_map);
+
+    std.log.warn("jeq_reg: {d}", .{result});
+    try expect(result == 0x2);
+}
+
