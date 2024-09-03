@@ -6,10 +6,10 @@ This is a wip implementation of eBPF in native Zig inspired by Quentin Monnet's 
 - [x] 64-bit ALU operations
 - [x] Memory operations
 - [x] Byteswap operations
-- [ ] Branch instructions
+- [x] Branch instructions (needs more testing)
 - [x] Syscalls
 - [ ] JIT Compiler
-- [x] Assembler
+- [x] Assembler (needs more testing)
 - [x] Disassembler
 - [ ] Unit Tests & Fuzzing
 
@@ -25,4 +25,4 @@ Following in the footsteps of rbpf, this project expects new commits to be cover
 
 ## License
 zig-ebpf is distributed under both MIT License and Apache License(Version 2.0).
- 
+
