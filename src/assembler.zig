@@ -2,6 +2,7 @@ const std = @import("std");
 const ebpf = @import("ebpf.zig");
 const parse = @import("asm_parser.zig").parse;
 
+/// Represents the type of eBPF instruction
 const InstructionType = enum {
     AluBinary,
     AluUnary,
@@ -21,75 +22,92 @@ const InstructionType = enum {
 const Operand = @import("asm_parser.zig").Operand;
 const Instruction = @import("asm_parser.zig").Instruction;
 
-fn makeInstructionMap() !std.AutoHashMap([]const u8, struct {
-    instType: InstructionType,
-    opcode: u8,
-}) {
-    var map = std.AutoHashMap([]const u8, struct {
-        instType: InstructionType,
-        opcode: u8,
-    }).init(std.heap.page_allocator);
+const InstructionMapEntry = struct { instType: InstructionType, opcode: u8 };
+const InstructionMap = std.StringHashMap(InstructionMapEntry);
 
-    const aluBinaryOps = &[_][]const u8{
-        "add", "sub", "mul", "div", "or", "and", "lsh", "rsh", "mod", "xor", "mov", "arsh",
-    };
-    const aluBinaryOpcodes = &[_]u8{
-        ebpf.BPF_ADD, ebpf.BPF_SUB, ebpf.BPF_MUL, ebpf.BPF_DIV, ebpf.BPF_OR,  ebpf.BPF_AND,
-        ebpf.BPF_LSH, ebpf.BPF_RSH, ebpf.BPF_MOD, ebpf.BPF_XOR, ebpf.BPF_MOV, ebpf.BPF_ARSH,
+/// Creates a map of instruction names to their types and opcodes
+fn makeInstructionMap() !InstructionMap {
+    var result = InstructionMap.init(std.heap.page_allocator);
+
+    const aluBinaryOps = [_]struct { name: []const u8, opc: u8 }{
+        .{ .name = "add", .opc = ebpf.BPF_ADD },
+        .{ .name = "sub", .opc = ebpf.BPF_SUB },
+        .{ .name = "mul", .opc = ebpf.BPF_MUL },
+        .{ .name = "div", .opc = ebpf.BPF_DIV },
+        .{ .name = "or", .opc = ebpf.BPF_OR },
+        .{ .name = "and", .opc = ebpf.BPF_AND },
+        .{ .name = "lsh", .opc = ebpf.BPF_LSH },
+        .{ .name = "rsh", .opc = ebpf.BPF_RSH },
+        .{ .name = "mod", .opc = ebpf.BPF_MOD },
+        .{ .name = "xor", .opc = ebpf.BPF_XOR },
+        .{ .name = "mov", .opc = ebpf.BPF_MOV },
+        .{ .name = "arsh", .opc = ebpf.BPF_ARSH },
     };
 
-    var i: usize = 0;
+    const memSizes = [_]struct { suffix: []const u8, size: u8 }{
+        .{ .suffix = "w", .size = ebpf.BPF_W },
+        .{ .suffix = "h", .size = ebpf.BPF_H },
+        .{ .suffix = "b", .size = ebpf.BPF_B },
+        .{ .suffix = "dw", .size = ebpf.BPF_DW },
+    };
+
+    const jumpConditions = [_]struct { name: []const u8, condition: u8 }{
+        .{ .name = "jeq", .condition = ebpf.BPF_JEQ },
+        .{ .name = "jgt", .condition = ebpf.BPF_JGT },
+        .{ .name = "jge", .condition = ebpf.BPF_JGE },
+        .{ .name = "jlt", .condition = ebpf.BPF_JLT },
+        .{ .name = "jle", .condition = ebpf.BPF_JLE },
+        .{ .name = "jset", .condition = ebpf.BPF_JSET },
+        .{ .name = "jne", .condition = ebpf.BPF_JNE },
+        .{ .name = "jsgt", .condition = ebpf.BPF_JSGT },
+        .{ .name = "jsge", .condition = ebpf.BPF_JSGE },
+        .{ .name = "jslt", .condition = ebpf.BPF_JSLT },
+        .{ .name = "jsle", .condition = ebpf.BPF_JSLE },
+    };
+
+    // Miscellaneous
+    try result.put("exit", InstructionMapEntry{ .instType = .NoOperand, .opcode = ebpf.EXIT });
+    try result.put("ja", InstructionMapEntry{ .instType = .JumpUnconditional, .opcode = ebpf.JA });
+    try result.put("call", InstructionMapEntry{ .instType = .Call, .opcode = ebpf.CALL });
+    try result.put("lddw", InstructionMapEntry{ .instType = .LoadImm, .opcode = ebpf.LD_DW_IMM });
+
+    // AluUnary
+    try result.put("neg", InstructionMapEntry{ .instType = .AluUnary, .opcode = ebpf.NEG64 });
+    try result.put("neg32", InstructionMapEntry{ .instType = .AluUnary, .opcode = ebpf.NEG32 });
+    try result.put("neg64", InstructionMapEntry{ .instType = .AluUnary, .opcode = ebpf.NEG64 });
+
+    // AluBinary
     for (aluBinaryOps) |op| {
-        map.put(op, .{ .instType = .AluBinary, .opcode = aluBinaryOpcodes[i] }) catch unreachable;
-        map.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{op}), .{ .instType = .AluBinary, .opcode = aluBinaryOpcodes[i] }) catch unreachable;
-        map.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}64", .{op}), .{ .instType = .AluBinary, .opcode = aluBinaryOpcodes[i] }) catch unreachable;
-        i += 1;
+        try result.put(op.name, InstructionMapEntry{ .instType = .AluBinary, .opcode = ebpf.BPF_ALU64 | op.opc });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{op.name}), InstructionMapEntry{ .instType = .AluBinary, .opcode = ebpf.BPF_ALU | op.opc });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}64", .{op.name}), InstructionMapEntry{ .instType = .AluBinary, .opcode = ebpf.BPF_ALU64 | op.opc });
     }
 
-    const memSizes = &[_][]const u8{ "w", "h", "b", "dw" };
-    const memOpcodes = &[_]u8{ ebpf.BPF_W, ebpf.BPF_H, ebpf.BPF_B, ebpf.BPF_DW };
-
-    i = 0;
+    // LoadAbs, LoadInd, LoadReg, StoreImm, and StoreReg
     for (memSizes) |size| {
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "ldabs{s}", .{size}), .{ .instType = .LoadAbs, .opcode = ebpf.BPF_ABS | ebpf.BPF_LD | memOpcodes[i] }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "ldind{s}", .{size}), .{ .instType = .LoadInd, .opcode = ebpf.BPF_IND | ebpf.BPF_LD | memOpcodes[i] }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "ldx{s}", .{size}), .{ .instType = .LoadReg, .opcode = ebpf.BPF_MEM | ebpf.BPF_LDX | memOpcodes[i] }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "st{s}", .{size}), .{ .instType = .StoreImm, .opcode = ebpf.BPF_MEM | ebpf.BPF_ST | memOpcodes[i] }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "stx{s}", .{size}), .{ .instType = .StoreReg, .opcode = ebpf.BPF_MEM | ebpf.BPF_STX | memOpcodes[i] }) catch unreachable;
-        i += 1;
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "ldabs{s}", .{size.suffix}), InstructionMapEntry{ .instType = .LoadAbs, .opcode = ebpf.BPF_ABS | ebpf.BPF_LD | size.size });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "ldind{s}", .{size.suffix}), InstructionMapEntry{ .instType = .LoadInd, .opcode = ebpf.BPF_IND | ebpf.BPF_LD | size.size });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "ldx{s}", .{size.suffix}), InstructionMapEntry{ .instType = .LoadReg, .opcode = ebpf.BPF_MEM | ebpf.BPF_LDX | size.size });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "st{s}", .{size.suffix}), InstructionMapEntry{ .instType = .StoreImm, .opcode = ebpf.BPF_MEM | ebpf.BPF_ST | size.size });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "stx{s}", .{size.suffix}), InstructionMapEntry{ .instType = .StoreReg, .opcode = ebpf.BPF_STX | ebpf.BPF_MEM | size.size });
     }
 
-    const jumpConditions = &[_][]const u8{
-        "jeq", "jgt", "jge", "jlt", "jle", "jset", "jne", "jsgt", "jsge", "jslt", "jsle",
-    };
-    const jumpOpcodes = &[_]u8{
-        ebpf.BPF_JEQ, ebpf.BPF_JGT,  ebpf.BPF_JGE,  ebpf.BPF_JLT,  ebpf.BPF_JLE,  ebpf.BPF_JSET,
-        ebpf.BPF_JNE, ebpf.BPF_JSGT, ebpf.BPF_JSGE, ebpf.BPF_JSLT, ebpf.BPF_JSLE,
-    };
-
-    i = 0;
-    for (jumpConditions) |cond| {
-        map.put(cond, .{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jumpOpcodes[i] }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{cond}), .{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP32 | jumpOpcodes[i] }) catch unreachable;
-        i += 1;
+    // JumpConditional
+    for (jumpConditions) |jmp| {
+        try result.put(jmp.name, InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jmp.condition });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{jmp.name}), InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP32 | jmp.condition });
     }
 
-    map.put("exit", .{ .instType = .NoOperand, .opcode = ebpf.EXIT }) catch unreachable;
-    map.put("ja", .{ .instType = .JumpUnconditional, .opcode = ebpf.JA }) catch unreachable;
-    map.put("call", .{ .instType = .Call, .opcode = ebpf.CALL }) catch unreachable;
-    map.put("lddw", .{ .instType = .LoadImm, .opcode = ebpf.LD_DW_IMM }) catch unreachable;
-    map.put("neg", .{ .instType = .AluUnary, .opcode = ebpf.NEG64 }) catch unreachable;
-    map.put("neg32", .{ .instType = .AluUnary, .opcode = ebpf.NEG32 }) catch unreachable;
-    map.put("neg64", .{ .instType = .AluUnary, .opcode = ebpf.NEG64 }) catch unreachable;
-
-    for ([_]u8{ 16, 32, 64 }) |size| {
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "be{d}", .{size}), .{ .instType = .Endian, .opcode = ebpf.BE }) catch unreachable;
-        map.put(std.fmt.allocPrint(std.heap.page_allocator, "le{d}", .{size}), .{ .instType = .Endian, .opcode = ebpf.LE }) catch unreachable;
+    // Endian
+    for ([_]u8{ 16, 32, 64 }) |sz| {
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "be{d}", .{sz}), InstructionMapEntry{ .instType = .Endian, .opcode = ebpf.BE });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "le{d}", .{sz}), InstructionMapEntry{ .instType = .Endian, .opcode = ebpf.LE });
     }
 
-    return map;
+    return result;
 }
 
+/// Creates an eBPF instruction from its components
 fn insn(opc: u8, dst: u8, src: u8, off: i16, imm: i32) ebpf.Instruction {
     return ebpf.Instruction{
         .op = opc,
@@ -100,98 +118,189 @@ fn insn(opc: u8, dst: u8, src: u8, off: i16, imm: i32) ebpf.Instruction {
     };
 }
 
-fn encode(instType: InstructionType, opc: u8, operands: [3]Operand) !ebpf.Instruction {
+/// Encodes a parsed instruction into an eBPF instruction
+fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.Instruction {
+    const operands = instruction.operands;
     switch (instType) {
         .AluBinary => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Register => return insn(opc | ebpf.BPF_X, operands[0].Register, operands[1].Register, 0, 0),
-                .Integer => return insn(opc | ebpf.BPF_K, operands[0].Register, 0, 0, @intCast(operands[1].Integer)),
-                else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Register => |src_reg| {
+                        if (src_reg > 10) return AssemblerError.InvalidRegister;
+                        return insn(opc | ebpf.BPF_X, reg, src_reg, 0, 0);
+                    },
+                    .Integer => |imm| {
+                        return insn(opc | ebpf.BPF_K, reg, 0, 0, @intCast(imm));
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
         .AluUnary => switch (operands[0]) {
-            .Register => return insn(opc, operands[0].Register, 0, 0, 0),
-            else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                return insn(opc, reg, 0, 0, 0);
+            },
+            else => return AssemblerError.InvalidOperands,
         },
         .LoadAbs => switch (operands[0]) {
-            .Integer => return insn(opc, 0, 0, 0, @intCast(operands[0].Integer)),
-            else => return error.InvalidOperands,
+            .Integer => |imm| {
+                return insn(opc, 0, 0, 0, @intCast(imm));
+            },
+            else => return AssemblerError.InvalidOperands,
         },
         .LoadInd => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Integer => return insn(opc, 0, operands[0].Register, 0, @intCast(operands[1].Integer)),
-                else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Integer => |off| {
+                        return insn(opc, 0, reg, 0, @intCast(off));
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
         .LoadImm => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Integer => return insn(opc, operands[0].Register, 0, 0, @intCast(operands[1].Integer)),
-                else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Integer => |imm| {
+                        return insn(opc, reg, 0, 0, @intCast(imm));
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
-        .LoadReg, .StoreReg => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Memory => return insn(opc, operands[0].Register, operands[1].Memory.base, @intCast(operands[1].Memory.offset), 0),
-                else => return error.InvalidOperands,
+        .LoadReg => switch (operands[0]) {
+            .Register => |dst| {
+                if (dst > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Memory => |mem| {
+                        if (mem.base > 10) return AssemblerError.InvalidRegister;
+                        return insn(opc, dst, mem.base, @intCast(mem.offset), 0);
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
         .StoreImm => switch (operands[0]) {
-            .Memory => switch (operands[1]) {
-                .Integer => return insn(opc, operands[0].Memory.base, 0, operands[0].Memory.offset, @intCast(operands[1].Integer)),
-                else => return error.InvalidOperands,
+            .Memory => |mem| {
+                if (mem.base > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Integer => |imm| {
+                        return insn(opc, mem.base, 0, @intCast(mem.offset), @intCast(imm));
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
+        },
+        .StoreReg => switch (operands[0]) {
+            .Memory => |mem| {
+                if (mem.base > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Register => |src| {
+                        if (src > 10) return AssemblerError.InvalidRegister;
+                        return insn(opc, mem.base, src, @intCast(mem.offset), 0);
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
+            },
+            else => return AssemblerError.InvalidOperands,
         },
         .JumpUnconditional => switch (operands[0]) {
-            .Integer => return insn(opc, 0, 0, @intCast(operands[0].Integer), 0),
-            else => return error.InvalidOperands,
+            .Integer => |off| {
+                return insn(opc, 0, 0, @intCast(off), 0);
+            },
+            else => return AssemblerError.InvalidOperands,
         },
         .JumpConditional => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Register => switch (operands[2]) {
-                    .Integer => return insn(opc | ebpf.BPF_X, operands[0].Register, operands[1].Register, @intCast(operands[2].Integer), 0),
-                    else => return error.InvalidOperands,
-                },
-                .Integer => switch (operands[2]) {
-                    .Integer => return insn(opc | ebpf.BPF_K, operands[0].Register, 0, @intCast(operands[2].Integer), @intCast(operands[1].Integer)),
-                    else => return error.InvalidOperands,
-                },
-                else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                switch (operands[1]) {
+                    .Register => |src_reg| {
+                        if (src_reg > 10) return AssemblerError.InvalidRegister;
+                        switch (operands[2]) {
+                            .Integer => |off| {
+                                return insn(opc | ebpf.BPF_X, reg, src_reg, @intCast(off), 0);
+                            },
+                            else => return AssemblerError.InvalidOperands,
+                        }
+                    },
+                    .Integer => |imm| {
+                        switch (operands[2]) {
+                            .Integer => |off| {
+                                return insn(opc | ebpf.BPF_K, reg, 0, @intCast(off), @intCast(imm));
+                            },
+                            else => return AssemblerError.InvalidOperands,
+                        }
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                }
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
         .Call => switch (operands[0]) {
-            .Integer => return insn(opc, 0, 0, 0, @intCast(operands[0].Integer)),
-            else => return error.InvalidOperands,
+            .Integer => |imm| {
+                return insn(opc, 0, 0, 0, @intCast(imm));
+            },
+            else => return AssemblerError.InvalidOperands,
         },
         .Endian => switch (operands[0]) {
-            .Register => switch (operands[1]) {
-                .Integer => return insn(opc, operands[0].Register, 0, 0, @intCast(operands[1].Integer)),
-                else => return error.InvalidOperands,
+            .Register => |reg| {
+                if (reg > 10) return AssemblerError.InvalidRegister;
+                const size: i32 = switch (opc) {
+                    ebpf.BE => blk: {
+                        if (std.mem.eql(u8, instruction.name, "be16")) {
+                            break :blk 16;
+                        } else if (std.mem.eql(u8, instruction.name, "be32")) {
+                            break :blk 32;
+                        } else if (std.mem.eql(u8, instruction.name, "be64")) {
+                            break :blk 64;
+                        } else {
+                            return AssemblerError.InvalidOperands;
+                        }
+                    },
+                    ebpf.LE => blk: {
+                        if (std.mem.eql(u8, instruction.name, "le16")) {
+                            break :blk 16;
+                        } else if (std.mem.eql(u8, instruction.name, "le32")) {
+                            break :blk 32;
+                        } else if (std.mem.eql(u8, instruction.name, "le64")) {
+                            break :blk 64;
+                        } else {
+                            return AssemblerError.InvalidOperands;
+                        }
+                    },
+                    else => return AssemblerError.InvalidOperands,
+                };
+                return insn(opc, reg, 0, 0, size);
             },
-            else => return error.InvalidOperands,
+            else => return AssemblerError.InvalidOperands,
         },
         .NoOperand => return insn(opc, 0, 0, 0, 0),
     }
 }
 
+/// Assembles a list of parsed instructions into eBPF bytecode
 fn assembleInternal(parsed: []Instruction) ![]ebpf.Instruction {
     var insns = std.ArrayList(ebpf.Instruction).init(std.heap.page_allocator);
     const instructionMap = try makeInstructionMap();
 
     for (parsed) |instruction| {
         const entry = instructionMap.get(instruction.name) orelse return AssemblerError.InvalidInstruction;
-        const inst = try encode(entry.instType, entry.opcode, instruction.operands);
-        insns.append(inst) catch return AssemblerError.OutOfMemory;
+        const inst = try encode(entry.instType, entry.opcode, instruction);
+        try insns.append(inst);
 
         // Special case for lddw
         if (entry.instType == .LoadImm and instruction.operands[1] != Operand.Nil) {
             if (instruction.operands[1] == Operand.Integer) {
-                insns.append(insn(0, 0, 0, 0, @intCast(i32, instruction.operands[1].Integer >> 32))) catch return AssemblerError.OutOfMemory;
+                try insns.append(insn(0, 0, 0, 0, @intCast(instruction.operands[1].Integer >> 32)));
             }
         }
     }
@@ -199,21 +308,26 @@ fn assembleInternal(parsed: []Instruction) ![]ebpf.Instruction {
     return insns.toOwnedSlice();
 }
 
-pub fn assemble(src: []const u8) ![]u8 {
+/// Assembles eBPF assembly source code into bytecode
+pub fn assemble(src: []const u8) ![]const u8 {
     const parsed = try parse(src);
     const insns = try assembleInternal(parsed);
 
     var result = std.ArrayList(u8).init(std.heap.page_allocator);
-    for (insns) |insn| {
-        result.appendSlice(&insn) catch return AssemblerError.OutOfMemory;
+    for (insns) |instruction| {
+        const instr_array = instruction.to_array();
+        try result.appendSlice(&instr_array);
     }
 
     return result.toOwnedSlice();
 }
 
+/// Possible errors during assembly
 pub const AssemblerError = error{
     InvalidInstruction,
     InvalidOperand,
     OutOfMemory,
     InvalidOperands,
+    InvalidRegister,
+    MismatchedOperands,
 };

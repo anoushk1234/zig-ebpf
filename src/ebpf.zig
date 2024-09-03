@@ -430,6 +430,19 @@ pub const Instruction = packed struct {
             .imm = std.mem.nativeToLittle(i32, std.mem.bytesToValue(i32, program[(INSN_SIZE * pc + 4)..])),
         };
     }
+
+    pub fn to_array(self: *const Instruction) [INSN_SIZE]u8 {
+        return [_]u8{
+            self.op,
+            @as(u8, self.src) << 4 | self.dst,
+            @intCast(self.offset & 0xFF),
+            @intCast((self.offset >> 8) & 0xFF),
+            @intCast(self.imm & 0xFF),
+            @intCast((self.imm >> 8) & 0xFF),
+            @intCast((self.imm >> 16) & 0xFF),
+            @intCast((self.imm >> 24) & 0xFF),
+        };
+    }
 };
 
 pub const InstructionError = error{

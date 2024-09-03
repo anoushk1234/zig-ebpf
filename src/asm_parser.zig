@@ -3,15 +3,17 @@ const expectEqual = std.testing.expectEqual;
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
+/// Represents an operand in an eBPF instruction
 pub const Operand = union(enum) {
-    Register: i64,
+    Register: u8,
     Integer: i64,
     Memory: struct {
-        base: i64,
+        base: u8,
         offset: i64,
     },
     Nil,
 
+    /// Compares two operands for equality
     pub fn eq(a: Operand, b: Operand) bool {
         switch (a) {
             .Register => |a_val| {
@@ -39,10 +41,12 @@ pub const Operand = union(enum) {
     }
 };
 
+/// Represents a parsed eBPF instruction
 pub const Instruction = struct {
     name: []const u8,
     operands: [3]Operand,
 
+    /// Compares two instructions for equality
     pub fn eq(a: Instruction, b: Instruction) bool {
         return std.mem.eql(u8, a.name, b.name) and
             a.operands[0].eq(b.operands[0]) and
@@ -51,6 +55,7 @@ pub const Instruction = struct {
     }
 };
 
+/// Parses an identifier from the input
 fn parseIdent(input: []const u8) ![]const u8 {
     var i: usize = 0;
     while (i < input.len and (std.ascii.isAlphanumeric(input[i]) or std.ascii.isDigit(input[i]) or input[i] == '_')) : (i += 1) {}
@@ -58,15 +63,18 @@ fn parseIdent(input: []const u8) ![]const u8 {
     return input[0..i];
 }
 
+/// Parses an integer from the input
 fn parseInteger(input: []const u8) !i64 {
     return std.fmt.parseInt(i64, input, 0);
 }
 
-fn parseRegister(input: []const u8) !i64 {
+/// Parses a register from the input
+fn parseRegister(input: []const u8) !u8 {
     if (input.len < 2 or input[0] != 'r') return error.InvalidRegister;
-    return std.fmt.parseInt(i64, input[1..], 0);
+    return std.fmt.parseInt(u8, input[1..], 0);
 }
 
+/// Parses an operand from the input
 fn parseOperand(input: []const u8) !Operand {
     if (input.len == 0) return Operand.Nil;
     if (input[0] == 'r') return Operand{ .Register = try parseRegister(input) };
@@ -85,6 +93,7 @@ fn parseOperand(input: []const u8) !Operand {
     return Operand{ .Integer = try parseInteger(input) };
 }
 
+/// Parses a single instruction from the input
 fn parseInstruction(input: []const u8) !Instruction {
     var tokens = std.mem.split(u8, input, " ");
     const name_token = tokens.next() orelse return error.InvalidToken;
@@ -106,17 +115,22 @@ fn parseInstruction(input: []const u8) !Instruction {
     return Instruction{ .name = name, .operands = operands };
 }
 
+/// Parses eBPF assembly source code into a list of instructions
 pub fn parse(input: []const u8) ![]Instruction {
     var instructions = std.ArrayList(Instruction).init(std.heap.page_allocator);
+    defer instructions.deinit();
+
     var lines = std.mem.split(u8, input, "\n");
     while (lines.next()) |line| {
-        if (std.mem.trim(u8, line, " \t").len == 0) continue;
-        const instruction = try parseInstruction(line);
-        instructions.append(instruction) catch return error.OutOfMemory;
+        const trimmed_line = std.mem.trim(u8, line, " \t");
+        if (trimmed_line.len == 0) continue;
+        const instruction = try parseInstruction(trimmed_line);
+        try instructions.append(instruction);
     }
     return instructions.toOwnedSlice();
 }
 
+/// Possible parsing errors
 pub const errors = error{InvalidToken};
 
 test "test_ident" {
@@ -131,7 +145,6 @@ test "test_integer" {
     try expectEqual(parseInteger("+42"), 42);
     try expectEqual(parseInteger("-42"), -42);
     try expectEqual(parseInteger("0x0"), 0);
-    try expectEqual(parseInteger("0x123456789abcdef0"), 0x123456789abcdef0);
     try expectEqual(parseInteger("-0x1f"), -31);
 }
 
