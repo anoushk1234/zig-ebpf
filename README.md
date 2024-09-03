@@ -9,7 +9,7 @@ This is a wip implementation of eBPF in native Zig inspired by Quentin Monnet's 
 - [ ] Branch instructions
 - [x] Syscalls
 - [ ] JIT Compiler
-- [ ] Assembler
+- [x] Assembler
 - [x] Disassembler
 - [ ] Unit Tests & Fuzzing
 
