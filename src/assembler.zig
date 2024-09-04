@@ -95,7 +95,7 @@ fn makeInstructionMap() !InstructionMap {
     // JumpConditional
     for (jumpConditions) |jmp| {
         try result.put(jmp.name, InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jmp.condition });
-        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{jmp.name}), InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP32 | jmp.condition });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{jmp.name}), InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jmp.condition });
     }
 
     // Endian
@@ -108,7 +108,7 @@ fn makeInstructionMap() !InstructionMap {
 }
 
 /// Creates an eBPF instruction from its components
-fn insn(opc: u8, dst: u8, src: u8, off: i16, imm: i32) ebpf.Instruction {
+fn ix(opc: u8, dst: u8, src: u8, off: i16, imm: i32) ebpf.Instruction {
     return ebpf.Instruction{
         .op = opc,
         .dst = dst,
@@ -128,10 +128,10 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 switch (operands[1]) {
                     .Register => |src_reg| {
                         if (src_reg > 10) return AssemblerError.InvalidRegister;
-                        return insn(opc | ebpf.BPF_X, reg, src_reg, 0, 0);
+                        return ix(opc | ebpf.BPF_X, @intCast(reg), @intCast(src_reg), 0, 0);
                     },
                     .Integer => |imm| {
-                        return insn(opc | ebpf.BPF_K, reg, 0, 0, @intCast(imm));
+                        return ix(opc | ebpf.BPF_K, @intCast(reg), 0, 0, @intCast(imm));
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -141,13 +141,13 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
         .AluUnary => switch (operands[0]) {
             .Register => |reg| {
                 if (reg > 10) return AssemblerError.InvalidRegister;
-                return insn(opc, reg, 0, 0, 0);
+                return ix(opc, @intCast(reg), 0, 0, 0);
             },
             else => return AssemblerError.InvalidOperands,
         },
         .LoadAbs => switch (operands[0]) {
             .Integer => |imm| {
-                return insn(opc, 0, 0, 0, @intCast(imm));
+                return ix(opc, 0, 0, 0, @intCast(imm));
             },
             else => return AssemblerError.InvalidOperands,
         },
@@ -156,7 +156,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 if (reg > 10) return AssemblerError.InvalidRegister;
                 switch (operands[1]) {
                     .Integer => |off| {
-                        return insn(opc, 0, reg, 0, @intCast(off));
+                        return ix(opc, 0, @intCast(reg), 0, @intCast(off));
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -168,7 +168,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 if (reg > 10) return AssemblerError.InvalidRegister;
                 switch (operands[1]) {
                     .Integer => |imm| {
-                        return insn(opc, reg, 0, 0, @intCast(imm));
+                        return ix(opc, @intCast(reg), 0, 0, @intCast(imm));
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -181,7 +181,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 switch (operands[1]) {
                     .Memory => |mem| {
                         if (mem.base > 10) return AssemblerError.InvalidRegister;
-                        return insn(opc, dst, mem.base, @intCast(mem.offset), 0);
+                        return ix(opc, @intCast(dst), @intCast(mem.base), @intCast(mem.offset), 0);
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -193,7 +193,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 if (mem.base > 10) return AssemblerError.InvalidRegister;
                 switch (operands[1]) {
                     .Integer => |imm| {
-                        return insn(opc, mem.base, 0, @intCast(mem.offset), @intCast(imm));
+                        return ix(opc, @intCast(mem.base), 0, @intCast(mem.offset), @intCast(imm));
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -206,7 +206,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                 switch (operands[1]) {
                     .Register => |src| {
                         if (src > 10) return AssemblerError.InvalidRegister;
-                        return insn(opc, mem.base, src, @intCast(mem.offset), 0);
+                        return ix(opc, @intCast(mem.base), @intCast(src), @intCast(mem.offset), 0);
                     },
                     else => return AssemblerError.InvalidOperands,
                 }
@@ -215,7 +215,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
         },
         .JumpUnconditional => switch (operands[0]) {
             .Integer => |off| {
-                return insn(opc, 0, 0, @intCast(off), 0);
+                return ix(opc, 0, 0, @intCast(off), 0);
             },
             else => return AssemblerError.InvalidOperands,
         },
@@ -227,7 +227,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                         if (src_reg > 10) return AssemblerError.InvalidRegister;
                         switch (operands[2]) {
                             .Integer => |off| {
-                                return insn(opc | ebpf.BPF_X, reg, src_reg, @intCast(off), 0);
+                                return ix(opc | ebpf.BPF_X, @intCast(reg), @intCast(src_reg), @intCast(off), 0);
                             },
                             else => return AssemblerError.InvalidOperands,
                         }
@@ -235,7 +235,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                     .Integer => |imm| {
                         switch (operands[2]) {
                             .Integer => |off| {
-                                return insn(opc | ebpf.BPF_K, reg, 0, @intCast(off), @intCast(imm));
+                                return ix(opc | ebpf.BPF_K, @intCast(reg), 0, @intCast(off), @intCast(imm));
                             },
                             else => return AssemblerError.InvalidOperands,
                         }
@@ -247,7 +247,7 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
         },
         .Call => switch (operands[0]) {
             .Integer => |imm| {
-                return insn(opc, 0, 0, 0, @intCast(imm));
+                return ix(opc, 0, 0, 0, @intCast(imm));
             },
             else => return AssemblerError.InvalidOperands,
         },
@@ -279,11 +279,11 @@ fn encode(instType: InstructionType, opc: u8, instruction: Instruction) !ebpf.In
                     },
                     else => return AssemblerError.InvalidOperands,
                 };
-                return insn(opc, reg, 0, 0, size);
+                return ix(opc, @intCast(reg), 0, 0, size);
             },
             else => return AssemblerError.InvalidOperands,
         },
-        .NoOperand => return insn(opc, 0, 0, 0, 0),
+        .NoOperand => return ix(opc, 0, 0, 0, 0),
     }
 }
 
@@ -300,7 +300,7 @@ fn assembleInternal(parsed: []Instruction) ![]ebpf.Instruction {
         // Special case for lddw
         if (entry.instType == .LoadImm and instruction.operands[1] != Operand.Nil) {
             if (instruction.operands[1] == Operand.Integer) {
-                try insns.append(insn(0, 0, 0, 0, @intCast(instruction.operands[1].Integer >> 32)));
+                try insns.append(ix(0, 0, 0, 0, @intCast(instruction.operands[1].Integer >> 32)));
             }
         }
     }
@@ -315,11 +315,21 @@ pub fn assemble(src: []const u8) ![]const u8 {
 
     var result = std.ArrayList(u8).init(std.heap.page_allocator);
     for (insns) |instruction| {
-        const instr_array = instruction.to_array();
-        try result.appendSlice(&instr_array);
+        try result.appendSlice(&instruction.to_array());
     }
 
-    return result.toOwnedSlice();
+    var formatted_result = std.ArrayList(u8).init(std.heap.page_allocator);
+    for (result.items, 0..) |byte, index| {
+        if (index % 8 == 0 and index != 0) {
+            try formatted_result.appendSlice("\n");
+        }
+        try std.fmt.format(formatted_result.writer(), "0x{x:0>2}", .{byte});
+        if (index % 8 != 7 and index != result.items.len - 1) {
+            try formatted_result.appendSlice(", ");
+        }
+    }
+
+    return formatted_result.items;
 }
 
 /// Possible errors during assembly

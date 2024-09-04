@@ -2,14 +2,27 @@ const std = @import("std");
 const testing = std.testing;
 const assembler = @import("zig-ebpf").assembler;
 
-/// Helper function to compare byte slices and provide detailed error messages
-fn expectEqualBytes(expected: []const u8, actual: []const u8) !void {
-    try testing.expectEqual(expected.len, actual.len);
-    for (expected, 0..) |exp_byte, i| {
-        if (exp_byte != actual[i]) {
-            std.debug.print("Mismatch at index {}: expected 0x{X:0>2}, found 0x{X:0>2}\n", .{ i, exp_byte, actual[i] });
-            return error.TestExpectedEqual;
+// Helper function to compare binary data and provide detailed error messages
+fn expectEqual(expected: []const u8, actual: []const u8) !void {
+    var expected_hex = std.ArrayList(u8).init(std.testing.allocator);
+    defer expected_hex.deinit();
+
+    for (expected, 0..) |byte, index| {
+        if (index % 8 == 0 and index != 0) {
+            try expected_hex.appendSlice("\n");
         }
+        try std.fmt.format(expected_hex.writer(), "0x{x:0>2}", .{byte});
+        if (index % 8 != 7 and index != expected.len - 1) {
+            try expected_hex.appendSlice(", ");
+        }
+    }
+
+    if (!std.mem.eql(u8, expected_hex.items, actual)) {
+        std.debug.print("Mismatch:\nExpected: {s}\nActual:   {s}\n", .{
+            expected_hex.items,
+            actual,
+        });
+        return error.TestExpectedEqual;
     }
 }
 
@@ -18,7 +31,7 @@ test "assembler - add64" {
     const expected = &[_]u8{ 0x07, 0x01, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - mov64" {
@@ -26,7 +39,7 @@ test "assembler - mov64" {
     const expected = &[_]u8{ 0xb7, 0x02, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - mov64 reg" {
@@ -34,7 +47,7 @@ test "assembler - mov64 reg" {
     const expected = &[_]u8{ 0xbf, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - be16" {
@@ -42,7 +55,7 @@ test "assembler - be16" {
     const expected = &[_]u8{ 0xdc, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - neg64" {
@@ -50,7 +63,7 @@ test "assembler - neg64" {
     const expected = &[_]u8{ 0x87, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - exit" {
@@ -58,7 +71,7 @@ test "assembler - exit" {
     const expected = &[_]u8{ 0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - full program" {
@@ -81,7 +94,7 @@ test "assembler - full program" {
     };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - invalid instruction" {
@@ -95,7 +108,7 @@ test "assembler - ja (jump always)" {
     const expected = &[_]u8{ 0x05, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jeq (jump if equal)" {
@@ -103,7 +116,7 @@ test "assembler - jeq (jump if equal)" {
     const expected = &[_]u8{ 0x15, 0x01, 0x03, 0x00, 0x10, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - call" {
@@ -111,7 +124,7 @@ test "assembler - call" {
     const expected = &[_]u8{ 0x85, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - ldxw (load word)" {
@@ -119,7 +132,7 @@ test "assembler - ldxw (load word)" {
     const expected = &[_]u8{ 0x61, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - stxb (store byte)" {
@@ -127,7 +140,7 @@ test "assembler - stxb (store byte)" {
     const expected = &[_]u8{ 0x73, 0x12, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - invalid register" {
@@ -172,7 +185,7 @@ test "assembler - complex program" {
     };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - sub64" {
@@ -180,7 +193,7 @@ test "assembler - sub64" {
     const expected = &[_]u8{ 0x17, 0x01, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - mul64" {
@@ -188,7 +201,7 @@ test "assembler - mul64" {
     const expected = &[_]u8{ 0x2f, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - div64" {
@@ -196,7 +209,7 @@ test "assembler - div64" {
     const expected = &[_]u8{ 0x37, 0x04, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - or64" {
@@ -204,7 +217,7 @@ test "assembler - or64" {
     const expected = &[_]u8{ 0x4f, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - and64" {
@@ -212,7 +225,7 @@ test "assembler - and64" {
     const expected = &[_]u8{ 0x57, 0x07, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - lsh64" {
@@ -220,7 +233,7 @@ test "assembler - lsh64" {
     const expected = &[_]u8{ 0x67, 0x08, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - rsh64" {
@@ -228,7 +241,7 @@ test "assembler - rsh64" {
     const expected = &[_]u8{ 0x7f, 0xa9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - mod64" {
@@ -236,7 +249,7 @@ test "assembler - mod64" {
     const expected = &[_]u8{ 0x97, 0x01, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - xor64" {
@@ -244,7 +257,7 @@ test "assembler - xor64" {
     const expected = &[_]u8{ 0xaf, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - arsh64" {
@@ -252,7 +265,7 @@ test "assembler - arsh64" {
     const expected = &[_]u8{ 0xc7, 0x04, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - ldabsw" {
@@ -260,7 +273,7 @@ test "assembler - ldabsw" {
     const expected = &[_]u8{ 0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - ldindw" {
@@ -268,7 +281,7 @@ test "assembler - ldindw" {
     const expected = &[_]u8{ 0x40, 0x10, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - ldxdw" {
@@ -276,7 +289,7 @@ test "assembler - ldxdw" {
     const expected = &[_]u8{ 0x79, 0x32, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jeq" {
@@ -284,7 +297,7 @@ test "assembler - jeq" {
     const expected = &[_]u8{ 0x15, 0x01, 0x05, 0x00, 0x10, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jgt" {
@@ -292,7 +305,7 @@ test "assembler - jgt" {
     const expected = &[_]u8{ 0x2d, 0x32, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jge" {
@@ -300,7 +313,7 @@ test "assembler - jge" {
     const expected = &[_]u8{ 0x35, 0x04, 0x0f, 0x00, 0x20, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jset" {
@@ -308,7 +321,7 @@ test "assembler - jset" {
     const expected = &[_]u8{ 0x45, 0x05, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jsgt" {
@@ -316,7 +329,7 @@ test "assembler - jsgt" {
     const expected = &[_]u8{ 0x6d, 0x76, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
 }
 
 test "assembler - jsge" {
@@ -324,5 +337,113 @@ test "assembler - jsge" {
     const expected = &[_]u8{ 0x75, 0x08, 0x1e, 0x00, 0x30, 0x00, 0x00, 0x00 };
     const result = try assembler.assemble(src);
     defer std.heap.page_allocator.free(result);
-    try expectEqualBytes(expected, result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - jeq32" {
+    const src =
+        \\mov r9, 1
+        \\lsh r9, 32
+        \\mov32 r0, 0
+        \\mov32 r1, 0xa
+        \\mov32 r2, 0xb
+        \\jeq32 r1, r2, +5
+        \\mov32 r0, 1
+        \\mov32 r1, 0xb
+        \\or r1, r9
+        \\jeq32 r1, r2, +1
+        \\mov32 r0, 2
+        \\exit
+    ;
+
+    const expected = &[_]u8{
+        0xb7, 0x09, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // mov r9, 1
+        0x67, 0x09, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, // lsh r9, 32
+        0xb4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov32 r0, 0
+        0xb4, 0x01, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, // mov32 r1, 0xa
+        0xb4, 0x02, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, // mov32 r2, 0xb
+        0x1d, 0x21, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, // jeq32 r1, r2, +5
+        0xb4, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // mov32 r0, 1
+        0xb4, 0x01, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, // mov32 r1, 0xb
+        0x4f, 0x91, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // or r1, r9
+        0x1d, 0x21, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // jeq32 r1, r2, +1
+        0xb4, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // mov32 r0, 2
+        0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
+    };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - ldxb (load byte)" {
+    const src = "ldxb r0, [r1+0x5]";
+    const expected = &[_]u8{ 0x71, 0x10, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - jne (jump if not equal)" {
+    const src = "jne r1, 0x10, +3";
+    const expected = &[_]u8{ 0x55, 0x01, 0x03, 0x00, 0x10, 0x00, 0x00, 0x00 };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - jslt (jump if signed less than)" {
+    const src = "jslt r2, r3, +5";
+    const expected = &[_]u8{ 0xcd, 0x32, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - ldabsb (load absolute byte)" {
+    const src = "ldabsb 0x10";
+    const expected = &[_]u8{ 0x30, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - ldindb (load indirect byte)" {
+    const src = "ldindb r1, 0x20";
+    const expected = &[_]u8{ 0x50, 0x10, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00 };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
+}
+
+test "assembler - complex program with various instructions" {
+    const src =
+        \\mov r1, 0x1
+        \\lsh r1, 32
+        \\or r1, 0x2
+        \\stxdw [r10-16], r1
+        \\ldxdw r2, [r10-16]
+        \\mov r3, 0x3
+        \\mov r3, 0x4
+        \\mov r3, 0x5
+        \\add r3, r2
+        \\mov r0, r3
+        \\exit
+    ;
+
+    const expected = &[_]u8{
+        0xb7, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // mov r1, 0x1
+        0x67, 0x01, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, // lsh r1, 32
+        0x47, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // or r1, 0x2
+        0x7b, 0x1a, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, // stxdw [r10-16], r1
+        0x79, 0xa2, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, // ldxdw r2, [r10-16]
+        0xb7, 0x03, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, // mov r3, 0x3
+        0xb7, 0x03, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, // mov r3, 0x4
+        0xb7, 0x03, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, // mov r3, 0x5
+        0x0f, 0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // add r3, r2
+        0xbf, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov r0, r3
+        0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
+    };
+    const result = try assembler.assemble(src);
+    defer std.heap.page_allocator.free(result);
+    try expectEqual(expected, result);
 }
