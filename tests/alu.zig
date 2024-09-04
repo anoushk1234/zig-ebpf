@@ -3,7 +3,7 @@ const testing = std.testing;
 const interpreter = @import("zig-ebpf").interpreter;
 const expect = std.testing.expect;
 const ebpf = @import("zig-ebpf").ebpf;
-
+const asem = @import("zig-ebpf").assembler;
 test "simple_alu64_add" {
     var buffer: [512]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
@@ -38,3 +38,45 @@ test "simple_jsle" {
     // std.log.warn("jsgt_imm: {d}", .{result});
     try expect(result == 0x1);
 }
+
+
+test "simple_jeq64_reg" {
+    var buffer: [512]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+
+    var syscalls_map = std.AutoHashMap(usize, ebpf.Syscall).init(std.testing.allocator);
+    defer syscalls_map.deinit();
+    const input =
+        \\mov r9, 1
+        \\lsh r9, 32
+        \\mov64 r0, 0
+        \\mov64 r1, 0xa
+        \\mov64 r2, 0xb
+        \\jeq r1, r2, +5
+        \\mov64 r0, 1
+        \\mov64 r1, 0xb
+        \\or r1, r9
+        \\jeq r1, r2, +1
+        \\mov64 r0, 2
+        \\exit
+    ;
+
+    var prog: []u8 = undefined;
+    var buff: [563]u8 = undefined;
+    prog = buff[0..563];
+
+    const temp = (try asem.assemble(input));
+    std.log.warn("jsgt_imm: {any}", .{temp.len});
+    // std.mem.copyForwards(u8, prog, temp);
+    @memcpy(prog, temp);
+    // var prog = [_]u8{ 183, 0, 0, 0, 0, 0, 0, 0, 183, 1, 0, 0, 254, 255, 255, 255, 101, 1, 4, 0, 255, 255, 255, 255, 183, 0, 0, 0, 1, 0, 0, 0, 183, 1, 0, 0, 0, 0, 0, 0, 101, 1, 1, 0, 255, 255, 255, 255, 183, 0, 0, 0, 2, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0 };
+    // var prog = [_]u8{ 183, 9, 0, 0, 1, 0, 0, 0, 103, 9, 0, 0, 32, 0, 0, 0, 183, 0, 0, 0, 0, 0, 0, 0, 183, 1, 0, 0, 10, 0, 0, 0, 183, 2, 0, 0, 11, 0, 0, 0, 29, 33, 5, 0, 0, 0, 0, 0, 183, 0, 0, 0, 1, 0, 0, 0, 183, 1, 0, 0, 11, 0, 0, 0, 79, 145, 0, 0, 0, 0, 0, 0, 29, 33, 1, 0, 0, 0, 0, 0, 183, 0, 0, 0, 2, 0, 0, 0, 149, 0, 0, 0, 0, 0, 0, 0 };
+    const mem = [_]u8{ 0xaa, 0xbb, 0x11, 0x22, 0xcc, 0xdd };
+    const mbuff = [_]u8{0} ** 32;
+
+
+    const result = try interpreter.execute_program(allocator, prog[0..], &mem, &mbuff, &syscalls_map);
+    try expect(result == 0x2);
+}
+
