@@ -95,7 +95,7 @@ fn parseOperand(input: []const u8) !Operand {
 
 /// Parses a single instruction from the input
 fn parseInstruction(input: []const u8) !Instruction {
-    var tokens = std.mem.split(u8, input, " ");
+    var tokens = std.mem.splitSequence(u8, input, " ");
     const name_token = tokens.next() orelse return error.InvalidToken;
     const name = try parseIdent(name_token);
     var operands: [3]Operand = .{ Operand.Nil, Operand.Nil, Operand.Nil };
@@ -104,7 +104,7 @@ fn parseInstruction(input: []const u8) !Instruction {
     // Get the remaining part of the input after the instruction name
     const remaining_input = std.mem.trim(u8, input[name.len..], " ");
     if (remaining_input.len > 0) {
-        var operand_tokens = std.mem.split(u8, remaining_input, ",");
+        var operand_tokens = std.mem.splitSequence(u8, remaining_input, ",");
         while (operand_tokens.next()) |token| {
             if (i >= operands.len) break;
             operands[i] = try parseOperand(std.mem.trim(u8, token, " "));
@@ -120,7 +120,7 @@ pub fn parse(input: []const u8) ![]Instruction {
     var instructions = std.ArrayList(Instruction).init(std.heap.page_allocator);
     defer instructions.deinit();
 
-    var lines = std.mem.split(u8, input, "\n");
+    var lines = std.mem.splitSequence(u8, input, "\n");
     while (lines.next()) |line| {
         const trimmed_line = std.mem.trim(u8, line, " \t");
         if (trimmed_line.len == 0) continue;
