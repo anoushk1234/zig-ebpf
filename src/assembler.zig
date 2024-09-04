@@ -95,7 +95,7 @@ fn makeInstructionMap() !InstructionMap {
     // JumpConditional
     for (jumpConditions) |jmp| {
         try result.put(jmp.name, InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jmp.condition });
-        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{jmp.name}), InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP32 | jmp.condition });
+        try result.put(try std.fmt.allocPrint(std.heap.page_allocator, "{s}32", .{jmp.name}), InstructionMapEntry{ .instType = .JumpConditional, .opcode = ebpf.BPF_JMP | jmp.condition });
     }
 
     // Endian
@@ -315,11 +315,21 @@ pub fn assemble(src: []const u8) ![]const u8 {
 
     var result = std.ArrayList(u8).init(std.heap.page_allocator);
     for (insns) |instruction| {
-        const instr_array = instruction.to_array();
-        try result.appendSlice(&instr_array);
+        try result.appendSlice(&instruction.to_array());
     }
 
-    return result.toOwnedSlice();
+    var formatted_result = std.ArrayList(u8).init(std.heap.page_allocator);
+    for (result.items, 0..) |byte, index| {
+        if (index % 8 == 0 and index != 0) {
+            try formatted_result.appendSlice("\n");
+        }
+        try std.fmt.format(formatted_result.writer(), "0x{x:0>2}", .{byte});
+        if (index % 8 != 7 and index != result.items.len - 1) {
+            try formatted_result.appendSlice(", ");
+        }
+    }
+
+    return formatted_result.items;
 }
 
 /// Possible errors during assembly
